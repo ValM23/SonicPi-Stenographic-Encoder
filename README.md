@@ -2,6 +2,9 @@
 
 SonicEncoder is a Proof-of-Concept (PoC) project, written in Ruby, that explores steganography by converting plaintext data into musical note patterns. These patterns can then be rendered into audible music using Sonic Pi, effectively hiding data in plain sight as a piece of music.
 
+## Produced in conjunction with Security Researchers within The Chaos Foundry Sec Div (Thanks, gals. <3) 
+- https://twitch.tv/chaosfoundry
+
 ## Project Purpose & Security Context
 
 The goal of this project was to research and demonstrate a novel covert channel. In a cybersecurity context, this explores how data might be exfiltrated from a target system in an unconventional format (like a .wav or .mp3 file) to bypass simple data loss prevention (DLP) filters that look for text, documents, or known file headers.
