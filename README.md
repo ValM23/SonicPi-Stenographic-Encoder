@@ -11,7 +11,7 @@ The goal of this project was to research and demonstrate a novel covert channel.
 
 This PoC serves as a tool for security researchers and blue teams to understand and anticipate creative evasion techniques.
 
-Current Status & Key Features
+## Current Status & Key Features
 
 Status: Proof-of-Concept
 
