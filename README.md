@@ -4,6 +4,7 @@ SonicEncoder is a Proof-of-Concept (PoC) project, written in Ruby, that explores
 
 ## Produced in conjunction with Security Researchers within The Chaos Foundry Sec Div (Thanks, gals. <3) 
 - https://twitch.tv/chaosfoundry
+- https://github.com/Archknight23/SonicEncoder
 
 ## Project Purpose & Security Context
 
