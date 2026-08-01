@@ -1,47 +1,52 @@
-# SonicEncoder: A Proof-of-Concept for Musical Steganography
+# SonicPi Steganographic Encoder
 
-SonicEncoder is a Proof-of-Concept (PoC) project, written in Ruby, that explores steganography by converting plaintext data into musical note patterns. These patterns can then be rendered into audible music using Sonic Pi, effectively hiding data in plain sight as a piece of music.
+A proof-of-concept in Ruby that encodes plaintext into MIDI note sequences,
+then generates [Sonic Pi](https://sonic-pi.net/) source to render that
+sequence as audio. The message survives as a piece of music rather than as
+a file with a recognizable header or extension.
 
-## Produced in conjunction with Security Researchers within The Chaos Foundry Sec Div (Thanks, gals. <3) 
-- https://twitch.tv/chaosfoundry
-- https://github.com/Archknight23/SonicEncoder
+## Motivation
 
-## Project Purpose & Security Context
+Most DLP tooling flags exfiltration by inspecting file type, header bytes,
+or plaintext patterns. This project asks a narrower question: what happens
+to detection if the payload is reshaped into something that reads as
+media instead of data? The answer here is a working demonstration, not a
+finished evasion technique — it's meant as a reference point for anyone
+building or testing detections against unconventional encodings.
 
-The goal of this project was to research and demonstrate a novel covert channel. In a cybersecurity context, this explores how data might be exfiltrated from a target system in an unconventional format (like a .wav or .mp3 file) to bypass simple data loss prevention (DLP) filters that look for text, documents, or known file headers.
+## How it works
 
-This PoC serves as a tool for security researchers and blue teams to understand and anticipate creative evasion techniques.
+The message is first encrypted with RSA (2048-bit) against a recipient's
+public key, so the note sequence never carries cleartext. Each byte of
+ciphertext maps to a MIDI note number. An optional harmonic mode remaps
+the same bytes across the C-major scale instead of the raw note range,
+producing a longer sequence that sounds more like a deliberate melody and
+less like noise — a direct tradeoff between payload length and how
+plausible the output audio is.
 
-## Current Status & Key Features
+`generatekeys.rb` produces the keypair. `songitizer.rb` takes a message
+(and optionally an IP:port to prepend) and prints Sonic Pi source ready to
+paste and run.
 
-Status: Proof-of-Concept
+## Limitations
 
-Language: Ruby
+There is no decoder. Recovering the message from rendered audio — parsing
+the waveform or a MIDI capture back into note numbers, then RSA-decrypting
+— is unimplemented and is the main gap between this and a usable channel.
+There's also no obfuscation beyond the harmonic remap, and no mechanism
+for two parties to exchange keys or verify each other automatically.
 
-Core Function: Encodes plaintext strings (e.g., messages, IP addresses) into a series of MIDI-compatible notes.
+## Possible next steps
 
-Encryption: The initial message is encrypted using a public/private key pair before encoding, ensuring the message is not in cleartext within the note data.
+- A decoder: recover note data from a WAV or MIDI capture and reverse the
+  encoding.
+- Padding the note sequence with harmonically valid but non-payload notes,
+  to raise the cost of statistical analysis.
+- A P2P exchange between two holders of a keypair, with basic verification.
 
-Harmonic Filtering: Includes logic to filter notes onto a C-scale. This makes the resulting musical output more harmonic and less suspicious than atonal, random noise.
+## Scope
 
-## Setup & Usage
-
-This project is written in Ruby.
-
-Before use, a public/private key pair must be generated. The generatekeys.rb script is provided for this purpose.
-
-The output text from songitizer.rb is designed to be pasted directly into Sonic Pi to render the musical output.
-
-## Future Development (Roadmap)
-
-The project is currently an encoder only. The logical next steps are:
-
- - Decoder Implementation: The immediate priority is to build the corresponding decoder. This would involve parsing a .wav or MIDI file, extracting the note data, and using the private key to decrypt the message, converting the music back into the original plaintext.
-
-- Obfuscation & Complexity: Research appending "junk" data—harmonically-correct, but non-message notes—to the output. This would increase the complexity and tonality of the 'song,' making programmatic analysis more difficult.
-
-- P2P Communication: A long-term goal is to explore a P2P framework where two clients could exchange messages as songs, using key verification to authenticate and decode the communications in real-time.
-
-# Disclaimer
-
-This project is intended for academic and security research purposes only. It is a Proof-of-Concept built to explore steganographic techniques from a defensive and research-oriented perspective.
+Built for research and portfolio purposes — steganographic encoding,
+public-key handling, and the size/plausibility tradeoff in disguised
+channels. Not maintained as a tool for use against systems without
+authorization.
