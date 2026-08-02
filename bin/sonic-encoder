@@ -1,0 +1,143 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+$LOAD_PATH.unshift(File.expand_path("../lib", __dir__))
+require "sonic_encoder"
+require "optparse"
+
+# Sonic Encoder CLI — encode/decode messages as MIDI note sequences.
+#
+# Subcommands:
+#   keygen  Generate an RSA keypair
+#   encode  Encode a message into a MIDI note sequence (Sonic Pi source or .mid)
+#   decode  Decode a MIDI note sequence back into the message
+#   demo    Run a full encode/decode round-trip self-test
+module SonicEncoderCLI
+  module_function
+
+  def run(argv)
+    command = argv.shift
+    case command
+    when "keygen" then keygen(argv)
+    when "encode" then encode(argv)
+    when "decode" then decode(argv)
+    when "demo"   then demo
+    when nil, "-h", "--help" then usage
+    else
+      warn "unknown command: #{command}"
+      usage
+      exit 1
+    end
+  end
+
+  def keygen(argv)
+    opts = { bits: 2048, private: "private.pem", public: "public.pem" }
+    parser = OptionParser.new do |o|
+      o.banner = "usage: sonic-encoder keygen [options]"
+      o.on("--bits N", Integer, "RSA key size (default 2048)") { |v| opts[:bits] = v }
+      o.on("--private PATH", "private key output path") { |v| opts[:private] = v }
+      o.on("--public PATH", "public key output path") { |v| opts[:public] = v }
+    end
+    parser.parse!(argv)
+
+    private_path, public_path = SonicEncoder.generate_keypair(
+      private_path: opts[:private], public_path: opts[:public], bits: opts[:bits]
+    )
+    puts "wrote #{private_path} (0600)"
+    puts "wrote #{public_path} (0644)"
+  end
+
+  def encode(argv)
+    opts = { message: nil, key: "public.pem", ip: nil, port: nil, midi: nil, bpm: 100 }
+    parser = OptionParser.new do |o|
+      o.banner = "usage: sonic-encoder encode [options]"
+      o.on("-m", "--message TEXT", "plaintext message") { |v| opts[:message] = v }
+      o.on("-k", "--key PATH", "recipient public key PEM (default public.pem)") { |v| opts[:key] = v }
+      o.on("--ip ADDR", "optional IPv4 to embed") { |v| opts[:ip] = v }
+      o.on("--port N", Integer, "optional TCP port to embed") { |v| opts[:port] = v }
+      o.on("--midi PATH", "also write a .mid file") { |v| opts[:midi] = v }
+      o.on("--bpm N", Integer, "Sonic Pi tempo (default 100)") { |v| opts[:bpm] = v }
+    end
+    parser.parse!(argv)
+
+    unless opts[:message]
+      warn "error: --message is required"
+      exit 1
+    end
+
+    notes = SonicEncoder.encode(
+      message: opts[:message], public_key: opts[:key],
+      ip: opts[:ip], port: opts[:port]
+    )
+    puts SonicEncoder.sonic_pi(notes, bpm: opts[:bpm])
+
+    if opts[:midi]
+      path = SonicEncoder.to_midi(notes, opts[:midi])
+      warn "wrote MIDI: #{path} (#{notes.length} notes)"
+    end
+  end
+
+  def decode(argv)
+    opts = { notes: nil, file: nil, key: "private.pem" }
+    parser = OptionParser.new do |o|
+      o.banner = "usage: sonic-encoder decode [options]"
+      o.on("-n", "--notes LIST", "comma-separated MIDI note numbers") { |v| opts[:notes] = v }
+      o.on("-f", "--file PATH", "read notes from file (one per line, or comma-separated)") { |v| opts[:file] = v }
+      o.on("-k", "--key PATH", "recipient private key PEM (default private.pem)") { |v| opts[:key] = v }
+    end
+    parser.parse!(argv)
+
+    note_list =
+      if opts[:file]
+        File.read(opts[:file]).scan(/\d+/).map(&:to_i)
+      elsif opts[:notes]
+        opts[:notes].split(",").map(&:to_i)
+      else
+        warn "error: --notes or --file is required"
+        exit 1
+      end
+
+    result = SonicEncoder.decode(notes: note_list, private_key: opts[:key])
+    puts "version: #{result[:version]}"
+    puts "ip:      #{result[:ip]}"
+    puts "port:    #{result[:port]}"
+    puts "message: #{result[:message]}"
+  end
+
+  def demo
+    require "tmpdir"
+
+    Dir.mktmpdir do |dir|
+      priv = File.join(dir, "private.pem")
+      pub  = File.join(dir, "public.pem")
+      SonicEncoder.generate_keypair(private_path: priv, public_path: pub)
+
+      message = "Sonic Encoder round-trip demo — #{Time.now.utc}"
+      notes = SonicEncoder.encode(message: message, public_key: pub, ip: "192.168.1.42", port: 8443)
+      result = SonicEncoder.decode(notes: notes, private_key: priv)
+
+      puts "encoded #{message.bytesize} bytes -> #{notes.length} MIDI notes"
+      puts "decoded ip=#{result[:ip]} port=#{result[:port]}"
+      puts "round-trip #{result[:message] == message ? "OK" : "FAILED"}"
+      exit(result[:message] == message ? 0 : 1)
+    end
+  end
+
+  def usage
+    puts <<~USAGE
+      Sonic Encoder — RSA-encrypted payloads as MIDI note sequences
+
+      usage: sonic-encoder COMMAND [options]
+
+      commands:
+        keygen   generate an RSA keypair (private.pem / public.pem)
+        encode   encode a message into Sonic Pi source (optionally .mid)
+        decode   decode a note sequence back into the message
+        demo     run an encode/decode round-trip self-test
+
+      run 'sonic-encoder COMMAND --help' for per-command options
+    USAGE
+  end
+end
+
+SonicEncoderCLI.run(ARGV) if $PROGRAM_NAME == __FILE__
